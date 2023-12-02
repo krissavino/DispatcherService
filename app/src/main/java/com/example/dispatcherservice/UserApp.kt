@@ -3,7 +3,6 @@ package com.example.dispatcherservice
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.provider.ContactsContract.Data
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -23,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -270,7 +268,7 @@ fun DispatcherProfileScreen(onExitClick : () -> Unit) {
 
     }
 }
-//TODO INSTALL DATABASE ON ANDROID!
+//TODO INSTALL DATABASE ON ANDROID! FAILED! FUCK ANDROID
 @Composable
 fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
     var screenType = if(MainActivity.userInfo.profession == "Client")
@@ -377,7 +375,7 @@ private fun UserRequestsScreen(
 private fun DispatcherRequestsScreen(onViewClicked: (request : UserRequest) -> Unit) {
     Column {
         Box(Modifier.fillMaxSize()) {
-            DispatcherRequests(onViewClicked)
+            DispatcherRequests(onViewClicked =onViewClicked)
         }
     }
 }
@@ -541,34 +539,71 @@ private fun DispatcherRequestScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DispatcherRequestsFilter(filterClicked : (filter : String) -> Unit) {
-    var filterExpanded by remember {mutableStateOf(false)}
+fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWords : List<String>) -> Unit) {
     val filterTypes = listOf("Время", "Статус", "Тип аварии")
-    var selectedType by remember { mutableStateOf(filterTypes[0]) }
-    Box(modifier = Modifier
-        .padding(16.dp)
-        .fillMaxWidth()) {
-        ExposedDropdownMenuBox(
-            expanded = filterExpanded,
-            onExpandedChange = { filterExpanded = !filterExpanded }) {
-            TextField(value = selectedType, onValueChange = {}, readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = filterExpanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .align(Alignment.Center)
-            )
-            ExposedDropdownMenu(
-                expanded = filterExpanded,
-                onDismissRequest = { filterExpanded = false }
-            ) {
-                filterTypes.forEach { item ->
-                    DropdownMenuItem(text = { Text(text = item) }, onClick = {
-                        filterClicked(item)
-                        selectedType = item
-                        filterExpanded = false
-                    })
+    var color1 = remember { mutableStateOf(true) }
+    var color2 = remember { mutableStateOf(false) }
+    var color3 = remember { mutableStateOf(false) }
+    var selectedFilters = listOf(filterTypes[0])
+    var searchWords by rememberSaveable { mutableStateOf("") }
+    Column() {
+        Text(
+            text = "Фильтр",
+            color = MaterialTheme.colorScheme.secondary,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .fillMaxWidth()
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(modifier = Modifier.fillMaxWidth()) {
+                filterTypes.forEach { text ->
+                    OutlinedButton(
+                        modifier = Modifier
+                            .weight(0.3f)
+                            .fillMaxWidth()
+                            .height(30.dp),
+                        onClick = {
+                              when(text) {
+                                  filterTypes[0] -> color1.value = !color1.value
+                                  filterTypes[1] -> color2.value = !color2.value
+                                  else -> color3.value = !color3.value
+                              }
+                            val tmpSW = searchWords.split(" ")
+                            filterClicked(selectedFilters,tmpSW)
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = when(text) {
+                                filterTypes[0] -> if(color1.value) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                                filterTypes[1] -> if(color2.value) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                                filterTypes[2] -> if(color3.value) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                                else -> {MaterialTheme.colorScheme.surface}
+                            }
+                        )
+                    ) {
+                        Text(
+                            fontSize = 11.sp,
+                            text = text
+                        )
+                    }
                 }
             }
+            Spacer(modifier = Modifier.padding(all=5.dp))
+            TextField(
+                label = { Text("Поиск") },
+                value = searchWords,
+                onValueChange = {
+                    searchWords = it
+                    val tmpSW = searchWords.split(" ")
+                    filterClicked(selectedFilters,tmpSW)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -580,10 +615,10 @@ private fun getDispatcherRequests() {
 }
 
 @Composable
-private fun DispatcherRequestsList(filterType : String, onViewClicked : (request : UserRequest) -> Unit) {
+private fun DispatcherRequestsList(filterTypes : MutableList<String>, onViewClicked : (request : UserRequest) -> Unit) {
     var sortedRequests = MainActivity.userRequests.sortedBy { it.date }
-    if(filterType == "Тип аварии") sortedRequests = MainActivity.userRequests.sortedBy { it.accidentType }
-    if(filterType == "Статус") sortedRequests = MainActivity.userRequests.sortedBy { it.state }
+    if(filterTypes.contains("Тип аварии")) sortedRequests = sortedRequests.sortedBy { it.accidentType }
+    if(filterTypes.contains("Статус")) sortedRequests = sortedRequests.sortedBy { it.state }
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isRefreshing) {
         if(isRefreshing) {
@@ -608,7 +643,7 @@ private fun DispatcherRequestsList(filterType : String, onViewClicked : (request
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DispatcherRequests(onViewClicked: (request : UserRequest) -> Unit) {
+private fun DispatcherRequests(onViewClicked: (request: UserRequest) -> Unit) {
     Column {
         val userRequests = listOf(UserRequest())
         if(userRequests.isEmpty()) {
@@ -622,11 +657,14 @@ private fun DispatcherRequests(onViewClicked: (request : UserRequest) -> Unit) {
                     .fillMaxWidth()
             )
         } else {
-            var filterType by remember { mutableStateOf("Время") }
-            DispatcherRequestsFilter(filterClicked = { filter ->
-                filterType = filter
+            var filterTypes by remember { mutableStateOf(mutableListOf("Время")) }
+            var searchWords by remember { mutableStateOf(mutableListOf<String>()) }
+            DispatcherRequestsFilter(filterClicked = { filters, sw ->
+                filterTypes = filters.toMutableList()
+                searchWords = sw.toMutableList()
+                Log.i("app_info", sw.count().toString())
             })
-            DispatcherRequestsList(filterType = filterType, onViewClicked)
+            DispatcherRequestsList(filterTypes = filterTypes, onViewClicked=onViewClicked)
         }
     }
 }
