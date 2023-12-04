@@ -165,9 +165,7 @@ class DatabaseManager {
             try {
                 val connection = getConnection()
                 val statement = connection.createStatement()
-                Log.i("sql_getuserreq", "ok")
                 val resultSet = statement.executeQuery("call get_user_requests(${userInfo.phone});")
-                Log.i("sql_getuserreq", "got it")
                 var tmpUserRequests: ArrayList<UserRequest> = arrayListOf()
                 while (resultSet.next()) {
                     var tmpUserRequest = UserRequest()
@@ -190,7 +188,8 @@ class DatabaseManager {
             val statement = connection.createStatement()
             try {
                 statement.executeUpdate("call send_user_request(" +
-                        "${userInfo.id}, \'${userRequest.accidentType}\', \'${userRequest.state}\', \"${SimpleDateFormat("yyyy-MM-dd").format(userRequest.date)}\", \'${userRequest.description}\'" +
+                        "${userInfo.id}, \'${userRequest.accidentType}\', \'${userRequest.state}\', " +
+                        "\"${SimpleDateFormat("yyyy-MM-dd").format(userRequest.date)}\", \'${userRequest.description}\'" +
                         ");")
             } catch (e : java.lang.Exception) {
                 Log.e("mysql_send_error", e.localizedMessage)

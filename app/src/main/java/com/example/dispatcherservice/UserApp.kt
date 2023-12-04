@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Surface
@@ -17,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -52,6 +54,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -384,6 +387,21 @@ private fun UserRequestsScreen(
     }
 }
 
+@Composable
+fun RowScope.TableCell(
+    text: String,
+    weight: Float
+) {
+    Text(
+        text = text,
+        modifier = Modifier
+            .border(1.dp, Color.Black)
+            .weight(weight)
+            .padding(8.dp)
+            .height(40.dp)
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DispatcherSQLScreen(
@@ -418,37 +436,47 @@ private fun DispatcherSQLScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            var sqlResult = remember { mutableStateMapOf<String, SnapshotStateList<String>>() }
+            var sqlResult = remember { mutableStateMapOf<String, MutableList<String>>() }
             Button(onClick = {
                 val tmpResult = DatabaseManager.sqlRequest(sqlQuery)
                 sqlResult.clear()
                 tmpResult.keys.forEach { key ->
                     sqlResult[key] = mutableStateListOf()
-                }//todo add to tmps result values !
-                Log.i("app_info", sqlResult["phone"]?.get(0) ?: "hehey")
+                }
+                tmpResult.keys.forEach {it1 ->
+                    tmpResult[it1]?.forEach { it2 ->
+                        sqlResult[it1]?.add(it2)
+                    }
+                }
             }) {
                 Text(
                     text = "Отправить"
                 )
             }
             Spacer(modifier = Modifier.padding(all=5.dp))
-            LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+            // The LazyColumn will be our table. Notice the use of the weights below
+            LazyColumn(
+                Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)) {
+                // Here is the header
                 item {
                     Row() {
-                        sqlResult.keys.forEach { item ->
-                            Text(text = item)
-                            Log.i("app_info_t", "key")
+                        sqlResult.keys.forEach {
+                            TableCell(text=it, 0.5f)
                         }
                     }
                 }
-                items(3) {
-                    Row() {
-                        sqlResult.values.forEach { item ->
-                            item.forEach { item2 ->
-                                Text(text = item2)
-                                Log.i("app_info_t", "value")
+
+                items(1) { item ->
+                    var i = 0
+                    sqlResult.values.forEach { it1 ->
+                        Row() {
+                        sqlResult.keys.forEach { it2 ->
+                                TableCell(text = sqlResult[it2]?.get(i) ?: "", weight = 0.5f)
                             }
                         }
+                        i += 1
                     }
                 }
             }
@@ -655,7 +683,8 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
                                 filterTypes[1] -> color2.value = !color2.value
                                 else -> color3.value = !color3.value
                             }
-                            val tmpSW = searchWords.split(" ")
+                            var tmpSW = searchWords.split(" ")
+                            if(tmpSW.isEmpty()) tmpSW = listOf(searchWords)
                             val tmpF = mutableListOf<String>(filterTypes[0])
                             if(color2.value) tmpF.add(filterTypes[1])
                             if(color3.value) tmpF.add(filterTypes[2])
@@ -686,8 +715,9 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
                 value = searchWords,
                 onValueChange = {
                     searchWords = it
-                    val tmpSW = searchWords.split(" ")
-                    Log.i("app_info", tmpSW.toString())
+                    var tmpSW = searchWords.split(" ").toMutableList()
+                    tmpSW.removeIf { sit -> sit == "" }
+                    if(tmpSW.isEmpty()) tmpSW = mutableListOf(searchWords)
                     val tmpF = mutableListOf<String>(filterTypes[0])
                     if(color2.value) tmpF.add(filterTypes[1])
                     if(color3.value) tmpF.add(filterTypes[2])
@@ -710,14 +740,19 @@ fun filterBySearchWords(requests : List<UserRequest>, searchWords : MutableList<
     var resultRequests = mutableListOf<UserRequest>()
     requests.forEach { request ->
         searchWords.forEach { word ->
-            if(request.description.contains(word) || request.state.toString().contains(word) || request.accidentType.contains(word)
-                || SimpleDateFormat("yyyy-MM-dd").format(request.date.time).contains(word)) {
+            val tmpState = when(request.state) {
+                RequestState.Done -> "Выполнен"
+                RequestState.Process -> "В процессе"
+                else -> "Новый"
+            }
+            if(request.description.contains(word,true) || tmpState.contains(word,true) || request.accidentType.contains(word,true)
+                || SimpleDateFormat("yyyy-MM-dd").format(request.date.time).contains(word,true)) {
                 resultRequests.add(request)
             } else {
                 var user = MainActivity.dispatcherUsers[request.id] ?: null
                 if(user != null) {
-                    if(user.address.contains(word) || user.firstName.contains(word) || user.secondName.contains(word)
-                        || user.middleName.contains(word) || user.phone.contains(word))
+                    if(user.address.contains(word,true) || user.firstName.contains(word,true) || user.secondName.contains(word,true)
+                        || user.middleName.contains(word,true) || user.phone.contains(word,true))
                         resultRequests.add(request)
                 }
             }
