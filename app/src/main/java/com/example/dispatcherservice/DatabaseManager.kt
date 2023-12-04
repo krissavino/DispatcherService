@@ -1,6 +1,11 @@
 package com.example.dispatcherservice
 import android.os.StrictMode
 import android.util.Log
+import android.widget.TableRow
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import java.io.*
 import java.sql.CallableStatement
 import java.sql.Connection
@@ -222,6 +227,38 @@ class DatabaseManager {
                 connection.close()
             }
             connection.close()
+        }
+
+        fun sqlRequest(request : String) : SnapshotStateMap<String, SnapshotStateList<String>> {
+            var result = mutableStateMapOf<String, SnapshotStateList<String>>()
+            try {
+                val connection = getConnection()
+                val statement = connection.createStatement()
+                try {
+                    if(request.contains("update") || request.contains("insert") || request.contains("delete")) {
+                        val resultSet = statement.executeUpdate(request)
+                    } else {
+                        val resultSet = statement.executeQuery(request)
+                        val resultMeta = resultSet.metaData
+                        for (i in 1..resultMeta.columnCount) {
+                            result[resultMeta.getColumnName(i)] = mutableStateListOf()
+                        }
+                        while (resultSet.next()) {
+                            for (i in 1..resultMeta.columnCount) {
+                                result[resultMeta.getColumnName(i)]?.add(resultSet.getString(i))
+                            }
+                        }
+                    }
+                } catch(e : Exception) {
+                    Log.e("mysql_sqlsend_error", e.localizedMessage)
+                    result = mutableStateMapOf(Pair(e.localizedMessage, mutableStateListOf()))
+                } finally {
+                    connection.close()
+                }
+            } catch (e : java.lang.Exception) {
+                Log.e("mysql_oldconnect_error", e.localizedMessage)
+            }
+            return result
         }
     }
 }

@@ -47,8 +47,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -75,7 +78,8 @@ enum class CurrentScreen {
     //Dispatcher
     DispatcherProfile,
     DispatcherRequest,
-    DispatcherRequests
+    DispatcherRequests,
+    DispatcherSQL
 }
 
 enum class RequestState {
@@ -92,6 +96,7 @@ class MainActivity : ComponentActivity() {
         public var userInfo : UserInfo = UserInfo()
         public var userRequests : ArrayList<UserRequest> = arrayListOf(UserRequest())
         public var dispatcherRequest : UserRequest = UserRequest()
+        public var dispatcherSQLResult : String = ""
         public var dispatcherUsers : MutableMap<Int, UserInfo> = mutableMapOf()
         public var currentScreen : CurrentScreen = CurrentScreen.Login
         private var instance: MainActivity? = null
@@ -115,7 +120,8 @@ private fun UserApp(modifier : Modifier = Modifier) {
     Surface(modifier) {
         Column {
             if(currentScreen == CurrentScreen.UserRequests || currentScreen == CurrentScreen.UserProfile
-                || currentScreen == CurrentScreen.DispatcherProfile || currentScreen == CurrentScreen.DispatcherRequests) {
+                || currentScreen == CurrentScreen.DispatcherProfile || currentScreen == CurrentScreen.DispatcherRequests
+                || currentScreen == CurrentScreen.DispatcherSQL) {
                 MenuButtons(onClick = { screenType ->
                     currentScreen = screenType
                 })
@@ -196,6 +202,11 @@ private fun UserApp(modifier : Modifier = Modifier) {
                         }
                     )
                 }
+                CurrentScreen.DispatcherSQL -> {
+                    DispatcherSQLScreen(
+                        onBackClicked = { currentScreen = CurrentScreen.DispatcherRequests }
+                    )
+                }
 
                 else -> {
 
@@ -274,11 +285,13 @@ fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
     var screenType = if(MainActivity.userInfo.profession == "Client")
         listOf(CurrentScreen.UserProfile, CurrentScreen.UserRequests)
     else
-        listOf(CurrentScreen.DispatcherProfile, CurrentScreen.DispatcherRequests)
+        listOf(CurrentScreen.DispatcherProfile, CurrentScreen.DispatcherRequests, CurrentScreen.DispatcherSQL)
     var (selectedType, onSelectType) = rememberSaveable { mutableStateOf(screenType[1]) }
     Row(modifier = Modifier.fillMaxWidth()) {
         screenType.forEach { text ->
-            Column( modifier = Modifier.weight(0.5f) ) {
+            Column( modifier = Modifier.weight(
+                if(MainActivity.userInfo.profession == "Client") 0.5f else 0.33f)
+            ) {
                 OutlinedButton(
                     onClick = {
                         selectedType = text
@@ -296,10 +309,11 @@ fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
                     },
                     shape = RectangleShape,
                     modifier = Modifier.fillMaxWidth()
-                    ) {
+                ) {
                     Text(
                         text = when(text) {
                             CurrentScreen.UserProfile -> "Профиль"
+                            CurrentScreen.DispatcherSQL -> "SQL"
                             CurrentScreen.DispatcherProfile -> "Профиль"
                             else -> "Запросы"
                         }
@@ -311,10 +325,10 @@ fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
 }
 
 open class UserRequest(state : RequestState = RequestState.New,
-                  accidentType : String = "Без типа",
-                  date : Date = Calendar.getInstance().time,
-                  description : String = "Без описания",
-                  id : Int = 0
+                       accidentType : String = "Без типа",
+                       date : Date = Calendar.getInstance().time,
+                       description : String = "Без описания",
+                       id : Int = 0
 ) {
     var state : RequestState = state
     var accidentType : String = accidentType
@@ -367,6 +381,78 @@ private fun UserRequestsScreen(
             }
         }
 
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DispatcherSQLScreen(
+    onBackClicked : () -> Unit
+) {
+    BackHandler() {
+        onBackClicked()
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "SQL запрос в БД",
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .padding(all = 4.dp)
+                    .fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.padding(all=5.dp))
+            var sqlQuery : String by rememberSaveable{ mutableStateOf("select * from client;") }
+            TextField(
+                label = { Text("SQL запрос") },
+                value = sqlQuery,
+                onValueChange = { sqlQuery = it },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            var sqlResult = remember { mutableStateMapOf<String, SnapshotStateList<String>>() }
+            Button(onClick = {
+                val tmpResult = DatabaseManager.sqlRequest(sqlQuery)
+                sqlResult.clear()
+                tmpResult.keys.forEach { key ->
+                    sqlResult[key] = mutableStateListOf()
+                }//todo add to tmps result values !
+                Log.i("app_info", sqlResult["phone"]?.get(0) ?: "hehey")
+            }) {
+                Text(
+                    text = "Отправить"
+                )
+            }
+            Spacer(modifier = Modifier.padding(all=5.dp))
+            LazyColumn(Modifier.fillMaxSize().padding(16.dp)) {
+                item {
+                    Row() {
+                        sqlResult.keys.forEach { item ->
+                            Text(text = item)
+                            Log.i("app_info_t", "key")
+                        }
+                    }
+                }
+                items(3) {
+                    Row() {
+                        sqlResult.values.forEach { item ->
+                            item.forEach { item2 ->
+                                Text(text = item2)
+                                Log.i("app_info_t", "value")
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -544,7 +630,6 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
     var color1 = remember { mutableStateOf(true) }
     var color2 = remember { mutableStateOf(false) }
     var color3 = remember { mutableStateOf(false) }
-    var selectedFilters = listOf(filterTypes[0])
     var searchWords by rememberSaveable { mutableStateOf("") }
     Column() {
         Text(
@@ -565,17 +650,20 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
                             .fillMaxWidth()
                             .height(30.dp),
                         onClick = {
-                              when(text) {
-                                  filterTypes[0] -> color1.value = !color1.value
-                                  filterTypes[1] -> color2.value = !color2.value
-                                  else -> color3.value = !color3.value
-                              }
+                            when(text) {
+                                filterTypes[0] -> color1.value = !color1.value
+                                filterTypes[1] -> color2.value = !color2.value
+                                else -> color3.value = !color3.value
+                            }
                             val tmpSW = searchWords.split(" ")
-                            filterClicked(selectedFilters,tmpSW)
+                            val tmpF = mutableListOf<String>(filterTypes[0])
+                            if(color2.value) tmpF.add(filterTypes[1])
+                            if(color3.value) tmpF.add(filterTypes[2])
+                            filterClicked(tmpF,tmpSW)
                         },
                         colors = ButtonDefaults.outlinedButtonColors(
                             containerColor = when(text) {
-                                filterTypes[0] -> if(color1.value) MaterialTheme.colorScheme.primaryContainer
+                                filterTypes[0] -> if(color1.value) { MaterialTheme.colorScheme.primaryContainer }
                                 else MaterialTheme.colorScheme.surface
                                 filterTypes[1] -> if(color2.value) MaterialTheme.colorScheme.primaryContainer
                                 else MaterialTheme.colorScheme.surface
@@ -599,7 +687,11 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
                 onValueChange = {
                     searchWords = it
                     val tmpSW = searchWords.split(" ")
-                    filterClicked(selectedFilters,tmpSW)
+                    Log.i("app_info", tmpSW.toString())
+                    val tmpF = mutableListOf<String>(filterTypes[0])
+                    if(color2.value) tmpF.add(filterTypes[1])
+                    if(color3.value) tmpF.add(filterTypes[2])
+                    filterClicked(tmpF,tmpSW)
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -614,11 +706,32 @@ private fun getDispatcherRequests() {
     MainActivity.dispatcherUsers = tmpPair.second
 }
 
+fun filterBySearchWords(requests : List<UserRequest>, searchWords : MutableList<String>) : List<UserRequest> {
+    var resultRequests = mutableListOf<UserRequest>()
+    requests.forEach { request ->
+        searchWords.forEach { word ->
+            if(request.description.contains(word) || request.state.toString().contains(word) || request.accidentType.contains(word)
+                || SimpleDateFormat("yyyy-MM-dd").format(request.date.time).contains(word)) {
+                resultRequests.add(request)
+            } else {
+                var user = MainActivity.dispatcherUsers[request.id] ?: null
+                if(user != null) {
+                    if(user.address.contains(word) || user.firstName.contains(word) || user.secondName.contains(word)
+                        || user.middleName.contains(word) || user.phone.contains(word))
+                        resultRequests.add(request)
+                }
+            }
+        }
+    }
+    return resultRequests
+}
+
 @Composable
-private fun DispatcherRequestsList(filterTypes : MutableList<String>, onViewClicked : (request : UserRequest) -> Unit) {
+private fun DispatcherRequestsList(filterTypes : MutableList<String>, searchWords : MutableList<String>, onViewClicked : (request : UserRequest) -> Unit) {
     var sortedRequests = MainActivity.userRequests.sortedBy { it.date }
     if(filterTypes.contains("Тип аварии")) sortedRequests = sortedRequests.sortedBy { it.accidentType }
     if(filterTypes.contains("Статус")) sortedRequests = sortedRequests.sortedBy { it.state }
+    if(searchWords.isNotEmpty()) sortedRequests = filterBySearchWords(sortedRequests, searchWords)
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isRefreshing) {
         if(isRefreshing) {
@@ -626,16 +739,28 @@ private fun DispatcherRequestsList(filterTypes : MutableList<String>, onViewClic
             isRefreshing = false
         }
     }
-    SwipeRefresh(
-        state =  rememberSwipeRefreshState(isRefreshing = isRefreshing),
-        onRefresh = {
-            Thread { getDispatcherRequests() }.start()
-            isRefreshing =  true
-        }
-    ) {
-        LazyColumn() {
-            items(sortedRequests) { item ->
-                DispatcherRequestCard(item, onViewClicked)
+    if(sortedRequests.isEmpty()) {
+        Text(
+            text = "Не найдено запросов удовлетворяющих условиям поиска",
+            color = MaterialTheme.colorScheme.secondary,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .padding(all = 12.dp)
+                .fillMaxWidth()
+        )
+    } else {
+        SwipeRefresh(
+            state = rememberSwipeRefreshState(isRefreshing = isRefreshing),
+            onRefresh = {
+                Thread { getDispatcherRequests() }.start()
+                isRefreshing = true
+            }
+        ) {
+            LazyColumn() {
+                items(sortedRequests) { item ->
+                    DispatcherRequestCard(item, onViewClicked)
+                }
             }
         }
     }
@@ -664,7 +789,7 @@ private fun DispatcherRequests(onViewClicked: (request: UserRequest) -> Unit) {
                 searchWords = sw.toMutableList()
                 Log.i("app_info", sw.count().toString())
             })
-            DispatcherRequestsList(filterTypes = filterTypes, onViewClicked=onViewClicked)
+            DispatcherRequestsList(filterTypes = filterTypes, searchWords=searchWords, onViewClicked=onViewClicked)
         }
     }
 }
@@ -1090,7 +1215,7 @@ fun UserProfileScreen(onEditClick: () -> kotlin.Unit, onExitClick: () -> kotlin.
             onValueChange = {
                 tmp_address = it
                 userInfo.address = tmp_address
-                },
+            },
             label = { Text("Адрес") },
             modifier = Modifier.padding(horizontal = 14.dp)
         )
