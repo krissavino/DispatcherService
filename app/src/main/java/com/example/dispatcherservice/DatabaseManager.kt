@@ -118,7 +118,12 @@ class DatabaseManager {
             val connection = getConnection()
             val statement = connection.createStatement()
             try {
-                statement.executeUpdate("update user set address=\'${userInfo.address}\' where phone=\'${userInfo.phone}\';")
+                statement.executeUpdate("update user set address=\'${userInfo.address}\'," +
+                        "set phone=\'${userInfo.phone}\', " +
+                        "set firstName=\'${userInfo.firstName}\', " +
+                        "set secondName=\'${userInfo.secondName}\', " +
+                        "set middleNAme=\'${userInfo.middleName}\' " +
+                        "where phone=\'${userInfo.phone}\';")
             } catch (e: java.lang.Exception) {
                 Log.e("mysql_error_getRequests", e.localizedMessage)
                 connection.close()

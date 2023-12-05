@@ -78,8 +78,6 @@ enum class CurrentScreen {
     UserRequests,
     AddingRequest,
     UserProfile,
-    //Dispatcher
-    DispatcherProfile,
     DispatcherRequest,
     DispatcherRequests,
     DispatcherSQL
@@ -123,7 +121,7 @@ private fun UserApp(modifier : Modifier = Modifier) {
     Surface(modifier) {
         Column {
             if(currentScreen == CurrentScreen.UserRequests || currentScreen == CurrentScreen.UserProfile
-                || currentScreen == CurrentScreen.DispatcherProfile || currentScreen == CurrentScreen.DispatcherRequests
+                || currentScreen == CurrentScreen.DispatcherRequests
                 || currentScreen == CurrentScreen.DispatcherSQL) {
                 MenuButtons(onClick = { screenType ->
                     currentScreen = screenType
@@ -164,8 +162,7 @@ private fun UserApp(modifier : Modifier = Modifier) {
                 CurrentScreen.UserProfile -> {
                     UserProfileScreen(
                         onEditClick = {
-                            if(DatabaseManager.updateUser(MainActivity.userInfo))
-                                MainActivity.userInfo = DatabaseManager.getUser(MainActivity.userInfo.phone) ?: UserInfo()
+                            Thread { DatabaseManager.updateUser(MainActivity.userInfo) }.start()
                         },
                         onExitClick = {
                             currentScreen = CurrentScreen.Login
@@ -176,11 +173,6 @@ private fun UserApp(modifier : Modifier = Modifier) {
                     UserRequestsScreen(
                         onAddClick = {  currentScreen = CurrentScreen.AddingRequest  }
                     )
-                }
-                CurrentScreen.DispatcherProfile -> {
-                    DispatcherProfileScreen(onExitClick = {
-                        currentScreen = CurrentScreen.Login
-                    })
                 }
                 CurrentScreen.DispatcherRequests -> {
                     DispatcherRequestsScreen(
@@ -220,75 +212,11 @@ private fun UserApp(modifier : Modifier = Modifier) {
 }
 
 @Composable
-fun DispatcherProfileScreen(onExitClick : () -> Unit) {
-    Column() {
-        val userInfo = MainActivity.userInfo
-        Text (
-            text = "Информация о пользователе",
-            color = MaterialTheme.colorScheme.secondary,
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .padding(all = 4.dp)
-                .fillMaxWidth()
-        )
-        Text (
-            text = "Фамилия: ${userInfo.secondName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, top = 10.dp, bottom = 10.dp)
-                .fillMaxWidth()
-        )
-        Text (
-            text = "Имя: ${userInfo.firstName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
-        )
-        Text (
-            text = "Отчество: ${userInfo.middleName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
-        )
-        Text (
-            text = "Номер телефона: ${userInfo.phone}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
-        )
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally) {
-            Button(
-                onClick = {
-                    MainActivity.userInfo = UserInfo()
-                    MainActivity.userRequests = arrayListOf()
-                    MainActivity.dispatcherRequest = UserRequest()
-                    onExitClick()
-                }
-            ) {
-                Text("Выход")
-            }
-        }
-
-    }
-}
-//TODO INSTALL DATABASE ON ANDROID! FAILED! FUCK ANDROID
-@Composable
 fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
     var screenType = if(MainActivity.userInfo.profession == "Client")
         listOf(CurrentScreen.UserProfile, CurrentScreen.UserRequests)
     else
-        listOf(CurrentScreen.DispatcherProfile, CurrentScreen.DispatcherRequests, CurrentScreen.DispatcherSQL)
+        listOf(CurrentScreen.UserProfile, CurrentScreen.DispatcherRequests, CurrentScreen.DispatcherSQL)
     var (selectedType, onSelectType) = rememberSaveable { mutableStateOf(screenType[1]) }
     Row(modifier = Modifier.fillMaxWidth()) {
         screenType.forEach { text ->
@@ -317,7 +245,6 @@ fun MenuButtons(onClick: (screenType : CurrentScreen) -> Unit) {
                         text = when(text) {
                             CurrentScreen.UserProfile -> "Профиль"
                             CurrentScreen.DispatcherSQL -> "SQL"
-                            CurrentScreen.DispatcherProfile -> "Профиль"
                             else -> "Запросы"
                         }
                     )
@@ -1212,37 +1139,45 @@ fun UserProfileScreen(onEditClick: () -> kotlin.Unit, onExitClick: () -> kotlin.
                 .padding(all = 4.dp)
                 .fillMaxWidth()
         )
-        Text (
-            text = "Фамилия: ${userInfo.secondName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, top = 10.dp, bottom = 10.dp)
-                .fillMaxWidth()
+        var tmp_sn by rememberSaveable { mutableStateOf(userInfo.secondName) }
+        TextField(
+            value = tmp_sn,
+            onValueChange = {
+                tmp_sn = it
+                userInfo.secondName = tmp_sn
+            },
+            label = { Text("Фамилия") },
+            modifier = Modifier.padding(horizontal = 14.dp)
         )
-        Text (
-            text = "Имя: ${userInfo.firstName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
+        var tmp_name by rememberSaveable { mutableStateOf(userInfo.firstName) }
+        TextField(
+            value = tmp_name,
+            onValueChange = {
+                tmp_name = it
+                userInfo.firstName = tmp_name
+            },
+            label = { Text("Имя") },
+            modifier = Modifier.padding(horizontal = 14.dp)
         )
-        Text (
-            text = "Отчество: ${userInfo.middleName}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
+        var tmp_mn by rememberSaveable { mutableStateOf(userInfo.middleName) }
+        TextField(
+            value = tmp_mn,
+            onValueChange = {
+                tmp_mn = it
+                userInfo.middleName = tmp_mn
+            },
+            label = { Text("Отчество") },
+            modifier = Modifier.padding(horizontal = 14.dp)
         )
-        Text (
-            text = "Номер телефона: ${userInfo.phone}",
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier
-                .padding(start = 14.dp, bottom = 10.dp)
-                .fillMaxWidth()
+        var tmp_phone by rememberSaveable { mutableStateOf(userInfo.phone) }
+        TextField(
+            value = tmp_phone,
+            onValueChange = {
+                tmp_phone = it
+                userInfo.phone = tmp_phone
+            },
+            label = { Text("Номер телефона") },
+            modifier = Modifier.padding(horizontal = 14.dp)
         )
         var tmp_address by rememberSaveable { mutableStateOf(userInfo.address) }
         TextField(
@@ -1255,7 +1190,10 @@ fun UserProfileScreen(onEditClick: () -> kotlin.Unit, onExitClick: () -> kotlin.
             modifier = Modifier.padding(horizontal = 14.dp)
         )
         Button(
-            onClick = onEditClick,
+            onClick = {
+                MainActivity.userInfo = userInfo
+                onEditClick()
+            },
             modifier = Modifier
                 .align(Alignment.CenterHorizontally)
                 .padding(all = 15.dp)
