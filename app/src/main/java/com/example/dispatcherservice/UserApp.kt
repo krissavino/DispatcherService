@@ -1,9 +1,12 @@
 package com.example.dispatcherservice
 
 import android.annotation.SuppressLint
+import android.app.DatePickerDialog
 import android.content.Context
+import android.graphics.Paint.Align
 import android.os.Bundle
 import android.util.Log
+import android.widget.DatePicker
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -60,7 +63,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.toLowerCase
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
@@ -162,7 +167,10 @@ private fun UserApp(modifier : Modifier = Modifier) {
                 CurrentScreen.UserProfile -> {
                     UserProfileScreen(
                         onEditClick = {
-                            Thread { DatabaseManager.updateUser(MainActivity.userInfo) }.start()
+                            Thread {
+                                DatabaseManager.updateUser(MainActivity.userInfo)
+                            }.start()
+                            Toast.makeText(MainActivity.applicationContext(),"Сохранено",Toast.LENGTH_SHORT).show()
                         },
                         onExitClick = {
                             currentScreen = CurrentScreen.Login
@@ -399,7 +407,7 @@ private fun DispatcherSQLScreen(
                     var i = 0
                     sqlResult.values.forEach { it1 ->
                         Row() {
-                        sqlResult.keys.forEach { it2 ->
+                            sqlResult.keys.forEach { it2 ->
                                 TableCell(text = sqlResult[it2]?.get(i) ?: "", weight = 0.5f)
                             }
                         }
@@ -580,63 +588,136 @@ private fun DispatcherRequestScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWords : List<String>) -> Unit) {
-    val filterTypes = listOf("Время", "Статус", "Тип аварии")
-    var color1 = remember { mutableStateOf(true) }
-    var color2 = remember { mutableStateOf(false) }
-    var color3 = remember { mutableStateOf(false) }
+fun DispatcherRequestsFilter(filterClicked : (selectedDate : String, selectedAccident : String, selectedState : String, searchWords : List<String>) -> Unit) {
     var searchWords by rememberSaveable { mutableStateOf("") }
+
+    var menuBox1Expanded by remember {mutableStateOf(false)}
+    val accidentTypes = listOf("Не выбрано","Холодное водоснабжение", "Горячее водоснабжение", "Газ", "Электричество", "Другое")
+    var accidentType by remember {mutableStateOf(accidentTypes[0])}
+    var menuBox2Expanded by remember {mutableStateOf(false)}
+    val stateTypes = listOf("Не выбрано","Новый", "В процессе", "Выполнен")
+    var stateType by remember { mutableStateOf(stateTypes[0]) }
+
+    val calendar = Calendar.getInstance()
+    val year = calendar.get(Calendar.YEAR)
+    val month = calendar.get(Calendar.MONTH)
+    val day = calendar.get(Calendar.DAY_OF_MONTH)
+    calendar.time = Date()
+    val date = remember { mutableStateOf("Не выбрано") }
+    val datePickerDialog = DatePickerDialog(
+        LocalContext.current,
+        { _: DatePicker, year:Int, month :Int, dayOfMonth: Int ->
+            var varmonth = month + 1
+            var tmp = varmonth.toString()
+            var tmp2 = dayOfMonth.toString()
+            if(varmonth < 10)
+                tmp = "0$tmp"
+            if(dayOfMonth < 10)
+                tmp2 = "0$tmp2"
+            date.value = "$year-$tmp-$tmp2"
+            var tmpSW = searchWords.split(" ").toMutableList()
+            tmpSW.removeIf { sit -> sit == "" }
+            if(tmpSW.isEmpty()) tmpSW = mutableListOf(searchWords)
+            filterClicked(date.value,accidentType,stateType,tmpSW)
+        }, year, month, day
+    )
+
     Column() {
-        Text(
-            text = "Фильтр",
-            color = MaterialTheme.colorScheme.secondary,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .padding(top = 10.dp)
-                .fillMaxWidth()
-        )
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(modifier = Modifier.fillMaxWidth()) {
-                filterTypes.forEach { text ->
-                    OutlinedButton(
-                        modifier = Modifier
-                            .weight(0.3f)
-                            .fillMaxWidth()
-                            .height(30.dp),
-                        onClick = {
-                            when(text) {
-                                filterTypes[0] -> color1.value = !color1.value
-                                filterTypes[1] -> color2.value = !color2.value
-                                else -> color3.value = !color3.value
-                            }
-                            var tmpSW = searchWords.split(" ")
-                            if(tmpSW.isEmpty()) tmpSW = listOf(searchWords)
-                            val tmpF = mutableListOf<String>(filterTypes[0])
-                            if(color2.value) tmpF.add(filterTypes[1])
-                            if(color3.value) tmpF.add(filterTypes[2])
-                            filterClicked(tmpF,tmpSW)
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = when(text) {
-                                filterTypes[0] -> if(color1.value) { MaterialTheme.colorScheme.primaryContainer }
-                                else MaterialTheme.colorScheme.surface
-                                filterTypes[1] -> if(color2.value) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surface
-                                filterTypes[2] -> if(color3.value) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surface
-                                else -> {MaterialTheme.colorScheme.surface}
-                            }
-                        )
+        Column(horizontalAlignment = Alignment.Start) {
+            var showFilter by remember { mutableStateOf(false) }
+            Button(
+                onClick = {
+                    showFilter = !showFilter
+                    if(!showFilter) {
+                        searchWords = ""
+                        date.value = "Не выбрано"
+                        accidentType = "Не выбрано"
+                        stateType = "Не выбрано"
+                        filterClicked(date.value,accidentType,stateType,mutableListOf(""))
+                    }
+                },
+                modifier=Modifier.padding(5.dp)
+            ) {
+                Text(text = "Фильтр")
+            }
+            if(showFilter) {
+                Button(onClick = {
+                    datePickerDialog.show()
+                },
+                    modifier = Modifier.padding(5.dp)) {
+                    Text("Дата: ${date.value}")
+                }
+                Box(
+                    modifier = Modifier
+                        .padding(5.dp)
+                        .fillMaxWidth()
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = menuBox1Expanded,
+                        onExpandedChange = { menuBox1Expanded = !menuBox1Expanded }
                     ) {
-                        Text(
-                            fontSize = 11.sp,
-                            text = text
+                        TextField(
+                            value = accidentType,
+                            textStyle = TextStyle.Default.copy(fontSize = 13.sp),
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuBox1Expanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .align(Alignment.Center)
                         )
+                        ExposedDropdownMenu(
+                            expanded = menuBox1Expanded,
+                            onDismissRequest = { menuBox1Expanded = false }
+                        ) {
+                            accidentTypes.forEach { item ->
+                                DropdownMenuItem(text = { Text(text = item) }, onClick = {
+                                    accidentType = item
+                                    var tmpSW = searchWords.split(" ").toMutableList()
+                                    tmpSW.removeIf { sit -> sit == "" }
+                                    if (tmpSW.isEmpty()) tmpSW = mutableListOf(searchWords)
+                                    filterClicked(date.value, accidentType, stateType, tmpSW)
+                                    menuBox1Expanded = false
+                                }, modifier = Modifier.align(Alignment.CenterHorizontally))
+                            }
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .padding(5.dp)
+                        .fillMaxWidth()
+                ) {
+                    ExposedDropdownMenuBox(
+                        expanded = menuBox2Expanded,
+                        onExpandedChange = { menuBox2Expanded = !menuBox2Expanded }
+                    ) {
+                        TextField(
+                            value = stateType, textStyle = TextStyle.Default.copy(fontSize = 13.sp),
+                            onValueChange = {}, readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuBox2Expanded) },
+                            modifier = Modifier
+                                .menuAnchor()
+                                .align(Alignment.Center)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = menuBox2Expanded,
+                            onDismissRequest = { menuBox2Expanded = false }
+                        ) {
+                            stateTypes.forEach { item ->
+                                DropdownMenuItem(text = { Text(text = item) }, onClick = {
+                                    stateType = item
+                                    var tmpSW = searchWords.split(" ").toMutableList()
+                                    tmpSW.removeIf { sit -> sit == "" }
+                                    if (tmpSW.isEmpty()) tmpSW = mutableListOf(searchWords)
+                                    filterClicked(date.value, accidentType, stateType, tmpSW)
+                                    menuBox2Expanded = false
+                                })
+                            }
+                        }
                     }
                 }
             }
-            Spacer(modifier = Modifier.padding(all=5.dp))
             TextField(
                 label = { Text("Поиск") },
                 value = searchWords,
@@ -645,10 +726,7 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
                     var tmpSW = searchWords.split(" ").toMutableList()
                     tmpSW.removeIf { sit -> sit == "" }
                     if(tmpSW.isEmpty()) tmpSW = mutableListOf(searchWords)
-                    val tmpF = mutableListOf<String>(filterTypes[0])
-                    if(color2.value) tmpF.add(filterTypes[1])
-                    if(color3.value) tmpF.add(filterTypes[2])
-                    filterClicked(tmpF,tmpSW)
+                    filterClicked(date.value,accidentType,stateType,tmpSW)
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -657,10 +735,16 @@ fun DispatcherRequestsFilter(filterClicked : (filters : List<String>, searchWord
     }
 }
 
-private fun getDispatcherRequests() {
+private fun getDispatcherRequests() : ArrayList<UserRequest> {
     val tmpPair = DatabaseManager.getDispatcherInfo()
     MainActivity.userRequests = tmpPair.first
     MainActivity.dispatcherUsers = tmpPair.second
+    return tmpPair.first
+}
+
+private fun getUserRequests() : ArrayList<UserRequest> {
+    MainActivity.userRequests = DatabaseManager.getUserRequests(MainActivity.userInfo)
+    return MainActivity.userRequests
 }
 
 fun filterBySearchWords(requests : List<UserRequest>, searchWords : MutableList<String>) : List<UserRequest> {
@@ -689,11 +773,42 @@ fun filterBySearchWords(requests : List<UserRequest>, searchWords : MutableList<
 }
 
 @Composable
-private fun DispatcherRequestsList(filterTypes : MutableList<String>, searchWords : MutableList<String>, onViewClicked : (request : UserRequest) -> Unit) {
-    var sortedRequests = MainActivity.userRequests.sortedBy { it.date }
-    if(filterTypes.contains("Тип аварии")) sortedRequests = sortedRequests.sortedBy { it.accidentType }
-    if(filterTypes.contains("Статус")) sortedRequests = sortedRequests.sortedBy { it.state }
-    if(searchWords.isNotEmpty()) sortedRequests = filterBySearchWords(sortedRequests, searchWords)
+private fun DispatcherRequestsList(
+    selectedDate: String, selectedAccident: String, selectedState: String,
+    searchWords : MutableList<String>, onViewClicked : (request : UserRequest) -> Unit)
+{
+    var sortedRequests = remember { MainActivity.userRequests }
+    var tmpRequests = sortedRequests.toMutableSet()
+    val tmp2Requests = tmpRequests.toMutableSet()
+    tmpRequests.clear()
+    tmp2Requests.forEach {
+        var good1 = true
+        var good2 = true
+        var good3 = true
+        if (selectedDate != "Не выбрано") {
+            if (SimpleDateFormat("yyyy-MM-dd").format(it.date) == selectedDate)
+            else
+                good1 = false
+        }
+        if (selectedAccident != "Не выбрано") {
+            if (it.accidentType == selectedAccident)
+            else
+                good2 = false
+        }
+        if (selectedState != "Не выбрано") {
+            val tmp = when (it.state) {
+                RequestState.Process -> "В процессе"
+                RequestState.Done -> "Выполнен"
+                else -> "Новый"
+            }
+            if (tmp == selectedState)
+            else
+                good3 = false
+        }
+        if(good1 && good2 && good3)
+            tmpRequests.add(it)
+    }
+    if(searchWords.isNotEmpty()) tmpRequests = filterBySearchWords(tmpRequests.toMutableList(), searchWords).toMutableSet()
     var isRefreshing by remember { mutableStateOf(false) }
     LaunchedEffect(isRefreshing) {
         if(isRefreshing) {
@@ -701,7 +816,7 @@ private fun DispatcherRequestsList(filterTypes : MutableList<String>, searchWord
             isRefreshing = false
         }
     }
-    if(sortedRequests.isEmpty()) {
+    if(tmpRequests.isEmpty()) {
         Text(
             text = "Не найдено запросов удовлетворяющих условиям поиска",
             color = MaterialTheme.colorScheme.secondary,
@@ -715,12 +830,16 @@ private fun DispatcherRequestsList(filterTypes : MutableList<String>, searchWord
         SwipeRefresh(
             state = rememberSwipeRefreshState(isRefreshing = isRefreshing),
             onRefresh = {
-                Thread { getDispatcherRequests() }.start()
+                val tmp = getDispatcherRequests()
+                sortedRequests.clear()
+                tmp.forEach {
+                    sortedRequests.add(it)
+                }
                 isRefreshing = true
             }
         ) {
             LazyColumn() {
-                items(sortedRequests) { item ->
+                items(tmpRequests.toMutableList()) { item ->
                     DispatcherRequestCard(item, onViewClicked)
                 }
             }
@@ -744,14 +863,19 @@ private fun DispatcherRequests(onViewClicked: (request: UserRequest) -> Unit) {
                     .fillMaxWidth()
             )
         } else {
-            var filterTypes by remember { mutableStateOf(mutableListOf("Время")) }
+            var selectedDate by remember { mutableStateOf("Не выбрано") }
+            var selectedAccident by remember { mutableStateOf("Не выбрано") }
+            var selectedState by remember { mutableStateOf("Не выбрано") }
             var searchWords by remember { mutableStateOf(mutableListOf<String>()) }
-            DispatcherRequestsFilter(filterClicked = { filters, sw ->
-                filterTypes = filters.toMutableList()
+            DispatcherRequestsFilter(filterClicked = { sd, sa, ss, sw ->
                 searchWords = sw.toMutableList()
+                selectedDate = sd.toString()
+                selectedAccident = sa.toString()
+                selectedState = ss
                 Log.i("app_info", sw.count().toString())
             })
-            DispatcherRequestsList(filterTypes = filterTypes, searchWords=searchWords, onViewClicked=onViewClicked)
+            DispatcherRequestsList(selectedDate=selectedDate, selectedAccident=selectedAccident, selectedState=selectedState,
+                searchWords=searchWords, onViewClicked=onViewClicked)
         }
     }
 }
@@ -759,7 +883,7 @@ private fun DispatcherRequests(onViewClicked: (request: UserRequest) -> Unit) {
 @Composable
 private fun UserRequests() {
     Column( ) {
-        var userRequests by rememberSaveable { mutableStateOf(MainActivity.userRequests) }
+        var userRequests = remember { getUserRequests() }
         if(userRequests.isEmpty()) {
             Text(
                 text = "Нет запросов.",
@@ -772,7 +896,7 @@ private fun UserRequests() {
             )
             Button(
                 onClick = {
-                    MainActivity.userRequests = DatabaseManager.getUserRequests(MainActivity.userInfo)
+
                     userRequests = MainActivity.userRequests
                 },
                 modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -793,7 +917,11 @@ private fun UserRequests() {
             SwipeRefresh(
                 state =  rememberSwipeRefreshState(isRefreshing = isRefreshing),
                 onRefresh = {
-                    Thread { MainActivity.userRequests = DatabaseManager.getUserRequests(MainActivity.userInfo) }.start()
+                    val tmp = getUserRequests()
+                    userRequests.clear()
+                    tmp.forEach {
+                        userRequests.add(it)
+                    }
                     isRefreshing = true
                 }
             ) {
@@ -1179,16 +1307,29 @@ fun UserProfileScreen(onEditClick: () -> kotlin.Unit, onExitClick: () -> kotlin.
             label = { Text("Номер телефона") },
             modifier = Modifier.padding(horizontal = 14.dp)
         )
-        var tmp_address by rememberSaveable { mutableStateOf(userInfo.address) }
+        var tmp_pass by rememberSaveable { mutableStateOf(userInfo.password) }
         TextField(
-            value = tmp_address,
+            value = tmp_pass,
             onValueChange = {
-                tmp_address = it
-                userInfo.address = tmp_address
+                tmp_pass = it
+                userInfo.password = tmp_pass
             },
-            label = { Text("Адрес") },
-            modifier = Modifier.padding(horizontal = 14.dp)
+            label = { Text("Пароль") },
+            modifier = Modifier.padding(horizontal = 14.dp),
+            visualTransformation = PasswordVisualTransformation()
         )
+        if(userInfo.profession == "Client") {
+            var tmp_address by rememberSaveable { mutableStateOf(userInfo.address) }
+            TextField(
+                value = tmp_address,
+                onValueChange = {
+                    tmp_address = it
+                    userInfo.address = tmp_address
+                },
+                label = { Text("Адрес") },
+                modifier = Modifier.padding(horizontal = 14.dp)
+            )
+        }
         Button(
             onClick = {
                 MainActivity.userInfo = userInfo

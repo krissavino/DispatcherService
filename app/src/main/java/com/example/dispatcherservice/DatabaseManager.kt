@@ -49,7 +49,7 @@ class DatabaseManager {
                 val tmpRes0 = resultQuery.getString("userType")
                 val tmpRes8 = resultQuery.getInt("id")
                 val tmpRes1 = resultQuery.getString("phone")
-                val tmpRes2 = resultQuery.getString("password")
+                val tmpRes2 = resultQuery.getString("passwd")
                 val tmpRes3 = resultQuery.getString("firstName")
                 val tmpRes4 = resultQuery.getString("secondName")
                 val tmpRes5 = resultQuery.getString("middleName")
@@ -118,14 +118,11 @@ class DatabaseManager {
             val connection = getConnection()
             val statement = connection.createStatement()
             try {
-                statement.executeUpdate("update user set address=\'${userInfo.address}\'," +
-                        "set phone=\'${userInfo.phone}\', " +
-                        "set firstName=\'${userInfo.firstName}\', " +
-                        "set secondName=\'${userInfo.secondName}\', " +
-                        "set middleNAme=\'${userInfo.middleName}\' " +
-                        "where phone=\'${userInfo.phone}\';")
+                val resultSet = statement.executeQuery("call update_user(${userInfo.id},\'${userInfo.phone}\',\'${userInfo.password}\',\'${userInfo.address}\'," +
+                        "\'${userInfo.firstName}\'," +
+                        "\'${userInfo.secondName}\',\'${userInfo.middleName}\');")
             } catch (e: java.lang.Exception) {
-                Log.e("mysql_error_getRequests", e.localizedMessage)
+                Log.e("mysql_error_upduser", e.localizedMessage)
                 connection.close()
                 return false
             }
@@ -142,11 +139,11 @@ class DatabaseManager {
                 var tmpUserInfos: MutableMap<Int, UserInfo> = mutableMapOf()
                 while (resultSet.next()) {
                     var tmpUserRequest = UserRequest(
-                        state = RequestState.valueOf(resultSet.getString("state")),
-                        accidentType = resultSet.getString("accidentType"),
-                        date = SimpleDateFormat("yyyy-MM-dd").parse(resultSet.getString("accidentDate")),
-                        description = resultSet.getString("description"),
-                        id = resultSet.getInt("idRequest")
+                        state = RequestState.valueOf(resultSet.getString("state") ?: "New"),
+                        accidentType = resultSet.getString("accidentType") ?: "Без типа",
+                        date = SimpleDateFormat("yyyy-MM-dd").parse(resultSet.getString("accidentDate") ?: "2023-01-01"),
+                        description = resultSet.getString("description") ?: "Без описания",
+                        id = resultSet.getInt("idRequest") ?: 1
                     )
                     var tmpUserInfo = UserInfo(
                         address = resultSet.getString("address"),
